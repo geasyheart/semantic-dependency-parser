@@ -1,0 +1,6 @@
+*.pyc
+*.pyo
+savepoint/
+__pycache__/
+.idea/
+*.log
