@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, AdamW, get_linear_schedule_with_warmup, 
 from src.config import MODEL_PATH
 from src.metric import ChartMetric
 from src.model import SemanticDependencyModel
-from src.transform import get_labels, SDPTransform
+from src.transform import get_labels, SDPTransform, get_tags
 from src.utils import logger
 
 
@@ -22,11 +22,13 @@ class SemanticDependencyParser(object):
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
         self.labels = get_labels()
+        self.tags = get_tags()
 
     def build_model(self, transformer):
         self.model = SemanticDependencyModel(
             transformer=transformer,
             n_labels=len(self.labels),
+            n_tags=len(self.tags)
         )
         self.model.to(self.device)
         logger.info(self.model)
@@ -157,7 +159,7 @@ class SemanticDependencyParser(object):
             mask = word_mask if len(subwords.shape) < 3 else word_mask.any(-1)
             mask = mask.unsqueeze(1) & mask.unsqueeze(2)
             mask[:, 0] = 0
-            s_edge, s_label = self.model(subwords)
+            s_edge, s_label = self.model(subwords, tags)
             loss = self.model.loss(s_edge, s_label, labels, mask)
             total_loss += loss.item()
             loss.backward()
@@ -178,7 +180,7 @@ class SemanticDependencyParser(object):
             mask = word_mask if len(subwords.shape) < 3 else word_mask.any(-1)
             mask = mask.unsqueeze(1) & mask.unsqueeze(2)
             mask[:, 0] = 0
-            s_edge, s_label = self.model(subwords)
+            s_edge, s_label = self.model(subwords, tags)
             loss = self.model.loss(s_edge, s_label, labels, mask)
             total_loss += loss.item()
 

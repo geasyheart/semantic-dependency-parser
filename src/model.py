@@ -9,7 +9,7 @@ from src.layers.transformer import TransformerEmbedding
 
 
 class SemanticDependencyModel(nn.Module):
-    def __init__(self, transformer: str, n_labels: int, n_edge_mlp=600, n_label_mlp=600):
+    def __init__(self, transformer: str, n_labels: int, n_tags: int, n_edge_mlp=600, n_label_mlp=600):
         super(SemanticDependencyModel, self).__init__()
 
         self.encoder = TransformerEmbedding(model=transformer,
@@ -18,18 +18,22 @@ class SemanticDependencyModel(nn.Module):
                                             pad_index=0,
                                             dropout=0.33,
                                             requires_grad=True)
-        self.edge_mlp_d = MLP(n_in=self.encoder.n_out, n_out=n_edge_mlp, dropout=0.33)
-        self.edge_mlp_h = MLP(n_in=self.encoder.n_out, n_out=n_edge_mlp, dropout=0.33)
+        self.tag_embedding = nn.Embedding(num_embeddings=n_tags, embedding_dim=64)
+        self.edge_mlp_d = MLP(n_in=self.encoder.n_out + self.tag_embedding.embedding_dim, n_out=n_edge_mlp, dropout=0.33)
+        self.edge_mlp_h = MLP(n_in=self.encoder.n_out + self.tag_embedding.embedding_dim, n_out=n_edge_mlp, dropout=0.33)
 
-        self.label_mlp_d = MLP(n_in=self.encoder.n_out, n_out=n_label_mlp, dropout=0.33)
-        self.label_mlp_h = MLP(n_in=self.encoder.n_out, n_out=n_label_mlp, dropout=0.33)
+        self.label_mlp_d = MLP(n_in=self.encoder.n_out + self.tag_embedding.embedding_dim, n_out=n_label_mlp, dropout=0.33)
+        self.label_mlp_h = MLP(n_in=self.encoder.n_out + self.tag_embedding.embedding_dim, n_out=n_label_mlp, dropout=0.33)
 
         self.edge_attn = Biaffine(n_in=n_edge_mlp, n_out=2, bias_x=True, bias_y=True)
         self.label_attn = Biaffine(n_in=n_label_mlp, n_out=n_labels, bias_x=True, bias_y=True)
         self.criterion = nn.CrossEntropyLoss()
 
-    def forward(self, subwords):
+    def forward(self, subwords, tags):
         bert_out = self.encoder(subwords)
+        tag_out = self.tag_embedding(tags)
+
+        bert_out = torch.cat([bert_out, tag_out], dim=-1)
         edge_mlp_d = self.edge_mlp_d(bert_out)
         edge_mlp_h = self.edge_mlp_h(bert_out)
 
